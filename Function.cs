@@ -82,9 +82,33 @@ public class Function
     return response;
   }
 
+  public class CreateUserRatingRequest
+  {
+    public string UserId { get; set; }
+    public int Rating { get; set; }
+  }
+
   private async Task<APIGatewayHttpApiV2ProxyResponse> CreateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
   {
-    var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
+    var movieIdStr = request.PathParameters["movieId"];
+    if (!int.TryParse(movieIdStr, out int movieId))
+    {
+      return new APIGatewayHttpApiV2ProxyResponse
+      {
+        StatusCode = (int)HttpStatusCode.BadRequest,
+        Body = "Invalid movie ID",
+        Headers = new Dictionary<string, string> { { "Content-Type", "text/plain" } }
+      };
+    }
+
+    var createUserRatingRequest = System.Text.Json.JsonSerializer.Deserialize<CreateUserRatingRequest>(request.Body);
+
+    var rating = new UserMovieRating
+    {
+      MovieId = movieId,
+      UserId = createUserRatingRequest.UserId,
+      Rating = createUserRatingRequest.Rating
+    };
 
     dbContext.UserMovieRatings.Add(rating);
     await dbContext.SaveChangesAsync();
@@ -120,16 +144,15 @@ public class Function
       }
 
       var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
-      rating.UserId = userId; // Set the user id from path parameters
-      rating.MovieId = movieId; // Set the movie id from path parameters
+      ratingToUpdate.Rating = rating.Rating;
 
-      dbContext.UserMovieRatings.Update(rating);
+      dbContext.UserMovieRatings.Update(ratingToUpdate);
       await dbContext.SaveChangesAsync();
 
       var response = new APIGatewayHttpApiV2ProxyResponse
       {
         StatusCode = (int)HttpStatusCode.OK,
-        Body = System.Text.Json.JsonSerializer.Serialize(rating),
+        Body = System.Text.Json.JsonSerializer.Serialize(ratingToUpdate),
         Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
       };
       return response;
@@ -167,7 +190,6 @@ public class Function
     var response = new APIGatewayHttpApiV2ProxyResponse
     {
       StatusCode = (int)HttpStatusCode.NoContent,
-      Body = "User movie rating deleted",
       Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
     };
     return response;
