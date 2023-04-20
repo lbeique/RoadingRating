@@ -100,17 +100,49 @@ public class Function
 
   private async Task<APIGatewayHttpApiV2ProxyResponse> UpdateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
   {
-    var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
-    dbContext.UserMovieRatings.Update(rating);
-    await dbContext.SaveChangesAsync();
+    var pathParameters = request.PathParameters;
 
-    var response = new APIGatewayHttpApiV2ProxyResponse
+    if (pathParameters != null && pathParameters.ContainsKey("movieId") && pathParameters.ContainsKey("userId"))
     {
-      StatusCode = (int)HttpStatusCode.OK,
-      Body = System.Text.Json.JsonSerializer.Serialize(rating),
-      Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-    };
-    return response;
+      var movieId = int.Parse(pathParameters["movieId"]);
+      var userId = pathParameters["userId"];
+
+      var ratingToUpdate = await dbContext.UserMovieRatings.FindAsync(userId, movieId);
+
+      if (ratingToUpdate == null)
+      {
+        return new APIGatewayHttpApiV2ProxyResponse
+        {
+          StatusCode = (int)HttpStatusCode.NotFound,
+          Body = "User movie rating not found",
+          Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+        };
+      }
+
+      var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
+      rating.UserId = userId; // Set the user id from path parameters
+      rating.MovieId = movieId; // Set the movie id from path parameters
+
+      dbContext.UserMovieRatings.Update(rating);
+      await dbContext.SaveChangesAsync();
+
+      var response = new APIGatewayHttpApiV2ProxyResponse
+      {
+        StatusCode = (int)HttpStatusCode.OK,
+        Body = System.Text.Json.JsonSerializer.Serialize(rating),
+        Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+      };
+      return response;
+    }
+    else
+    {
+      return new APIGatewayHttpApiV2ProxyResponse
+      {
+        StatusCode = (int)HttpStatusCode.BadRequest,
+        Body = "Invalid request",
+        Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+      };
+    }
   }
 
   private async Task<APIGatewayHttpApiV2ProxyResponse> DeleteUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
