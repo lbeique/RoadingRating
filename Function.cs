@@ -36,11 +36,12 @@ public class Function
           return await GetUserMovieRating(int.Parse(pathParameters["movieId"]), pathParameters["userId"]);
         }
         break;
-
       case "POST":
-        return await CreateUserMovieRating(request);
-      case "PUT":
-        return await UpdateUserMovieRating(request);
+        return await UpsertUserMovieRating(request);
+      //   case "POST":
+      //     return await CreateUserMovieRating(request);
+      //   case "PUT":
+      //     return await UpdateUserMovieRating(request);
       case "DELETE":
         return await DeleteUserMovieRating(request);
       default:
@@ -88,7 +89,7 @@ public class Function
     public int Rating { get; set; }
   }
 
-  private async Task<APIGatewayHttpApiV2ProxyResponse> CreateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
+  private async Task<APIGatewayHttpApiV2ProxyResponse> UpsertUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
   {
     var movieIdStr = request.PathParameters["movieId"];
     if (!int.TryParse(movieIdStr, out int movieId))
@@ -103,70 +104,120 @@ public class Function
 
     var createUserRatingRequest = System.Text.Json.JsonSerializer.Deserialize<CreateUserRatingRequest>(request.Body);
 
-    var rating = new UserMovieRating
+    var existingRating = await dbContext.UserMovieRatings.FindAsync(createUserRatingRequest.UserId, movieId);
+
+    if (existingRating == null)
     {
-      MovieId = movieId,
-      UserId = createUserRatingRequest.UserId,
-      Rating = createUserRatingRequest.Rating
-    };
-
-    dbContext.UserMovieRatings.Add(rating);
-    await dbContext.SaveChangesAsync();
-
-    var response = new APIGatewayHttpApiV2ProxyResponse
-    {
-      StatusCode = (int)HttpStatusCode.Created,
-      Body = System.Text.Json.JsonSerializer.Serialize(rating),
-      Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-    };
-    return response;
-  }
-
-  private async Task<APIGatewayHttpApiV2ProxyResponse> UpdateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
-  {
-    var pathParameters = request.PathParameters;
-
-    if (pathParameters != null && pathParameters.ContainsKey("movieId") && pathParameters.ContainsKey("userId"))
-    {
-      var movieId = int.Parse(pathParameters["movieId"]);
-      var userId = pathParameters["userId"];
-
-      var ratingToUpdate = await dbContext.UserMovieRatings.FindAsync(userId, movieId);
-
-      if (ratingToUpdate == null)
+      var newRating = new UserMovieRating
       {
-        return new APIGatewayHttpApiV2ProxyResponse
-        {
-          StatusCode = (int)HttpStatusCode.NotFound,
-          Body = "User movie rating not found",
-          Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
-        };
-      }
+        MovieId = movieId,
+        UserId = createUserRatingRequest.UserId,
+        Rating = createUserRatingRequest.Rating
+      };
 
-      var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
-      ratingToUpdate.Rating = rating.Rating;
-
-      dbContext.UserMovieRatings.Update(ratingToUpdate);
+      dbContext.UserMovieRatings.Add(newRating);
       await dbContext.SaveChangesAsync();
 
-      var response = new APIGatewayHttpApiV2ProxyResponse
+      return new APIGatewayHttpApiV2ProxyResponse
       {
-        StatusCode = (int)HttpStatusCode.OK,
-        Body = System.Text.Json.JsonSerializer.Serialize(ratingToUpdate),
+        StatusCode = (int)HttpStatusCode.Created,
+        Body = System.Text.Json.JsonSerializer.Serialize(newRating),
         Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
       };
-      return response;
     }
     else
     {
+      existingRating.Rating = createUserRatingRequest.Rating;
+      dbContext.UserMovieRatings.Update(existingRating);
+      await dbContext.SaveChangesAsync();
       return new APIGatewayHttpApiV2ProxyResponse
       {
-        StatusCode = (int)HttpStatusCode.BadRequest,
-        Body = "Invalid request",
+        StatusCode = (int)HttpStatusCode.OK,
+        Body = System.Text.Json.JsonSerializer.Serialize(existingRating),
         Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
       };
     }
   }
+
+  //   private async Task<APIGatewayHttpApiV2ProxyResponse> CreateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
+  //   {
+  //     var movieIdStr = request.PathParameters["movieId"];
+  //     if (!int.TryParse(movieIdStr, out int movieId))
+  //     {
+  //       return new APIGatewayHttpApiV2ProxyResponse
+  //       {
+  //         StatusCode = (int)HttpStatusCode.BadRequest,
+  //         Body = "Invalid movie ID",
+  //         Headers = new Dictionary<string, string> { { "Content-Type", "text/plain" } }
+  //       };
+  //     }
+
+  //     var createUserRatingRequest = System.Text.Json.JsonSerializer.Deserialize<CreateUserRatingRequest>(request.Body);
+
+  //     var rating = new UserMovieRating
+  //     {
+  //       MovieId = movieId,
+  //       UserId = createUserRatingRequest.UserId,
+  //       Rating = createUserRatingRequest.Rating
+  //     };
+
+  //     dbContext.UserMovieRatings.Add(rating);
+  //     await dbContext.SaveChangesAsync();
+
+  //     var response = new APIGatewayHttpApiV2ProxyResponse
+  //     {
+  //       StatusCode = (int)HttpStatusCode.Created,
+  //       Body = System.Text.Json.JsonSerializer.Serialize(rating),
+  //       Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+  //     };
+  //     return response;
+  //   }
+
+  //   private async Task<APIGatewayHttpApiV2ProxyResponse> UpdateUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
+  //   {
+  //     var pathParameters = request.PathParameters;
+
+  //     if (pathParameters != null && pathParameters.ContainsKey("movieId") && pathParameters.ContainsKey("userId"))
+  //     {
+  //       var movieId = int.Parse(pathParameters["movieId"]);
+  //       var userId = pathParameters["userId"];
+
+  //       var ratingToUpdate = await dbContext.UserMovieRatings.FindAsync(userId, movieId);
+
+  //       if (ratingToUpdate == null)
+  //       {
+  //         return new APIGatewayHttpApiV2ProxyResponse
+  //         {
+  //           StatusCode = (int)HttpStatusCode.NotFound,
+  //           Body = "User movie rating not found",
+  //           Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+  //         };
+  //       }
+
+  //       var rating = System.Text.Json.JsonSerializer.Deserialize<UserMovieRating>(request.Body);
+  //       ratingToUpdate.Rating = rating.Rating;
+
+  //       dbContext.UserMovieRatings.Update(ratingToUpdate);
+  //       await dbContext.SaveChangesAsync();
+
+  //       var response = new APIGatewayHttpApiV2ProxyResponse
+  //       {
+  //         StatusCode = (int)HttpStatusCode.OK,
+  //         Body = System.Text.Json.JsonSerializer.Serialize(ratingToUpdate),
+  //         Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+  //       };
+  //       return response;
+  //     }
+  //     else
+  //     {
+  //       return new APIGatewayHttpApiV2ProxyResponse
+  //       {
+  //         StatusCode = (int)HttpStatusCode.BadRequest,
+  //         Body = "Invalid request",
+  //         Headers = new Dictionary<string, string> { { "Content-Type", "application/json" } }
+  //       };
+  //     }
+  //   }
 
   private async Task<APIGatewayHttpApiV2ProxyResponse> DeleteUserMovieRating(APIGatewayHttpApiV2ProxyRequest request)
   {
